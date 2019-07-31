@@ -1,16 +1,16 @@
 /******************************************************************************
- Copyright (c) 2019, Lukas Bagaric 
+ Copyright (c) 2019, Lukas Bagaric
  All rights reserved.
- 
+
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions are met:
- 
+
  - Redistributions of source code must retain the above copyright notice, this
  list of conditions and the following disclaimer.
  - Redistributions in binary form must reproduce the above copyright notice,
  this list of conditions and the following disclaimer in the documentation
  and/or other materials provided with the distribution.
- 
+
  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -179,13 +179,13 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
 
     ~spsc_queue() {
         std::atomic_thread_fence(std::memory_order_seq_cst);
-        consume_all([](T*){ return true; });
+        consume_all([](T*) { return true; });
     }
 
-    spsc_queue(const spsc_queue& other) {
+    spsc_queue(const spsc_queue & other) {
         auto tail = 0;
 
-        detail::scope_guard g([&, this]{
+        detail::scope_guard g([&, this] {
             tail_cache = tail;
             _tail.store(tail);
         });
@@ -193,9 +193,11 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
         auto src_tail = other._tail.load();
         auto src_head = other._head.load();
 
-        while(src_head != src_tail) {
+        while (src_head != src_tail) {
             new(_buffer.data() + tail * sizeof(T))
-                T(other._buffer.data() + src_head * sizeof(T));
+                T(*std::launder(reinterpret_cast<T*>(
+                    other._buffer.data() + src_head * sizeof(T)
+                )));
 
             tail += 1;
             src_head += 1;
@@ -203,19 +205,19 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
         }
     }
 
-    spsc_queue& operator=(const spsc_queue& other) {
+    spsc_queue& operator=(const spsc_queue & other) {
         if (this == &other) return *this;
 
         {
             auto head = _head.load();
             auto tail = _tail.load();
 
-            detail::scope_guard g([&, this]{
+            detail::scope_guard g([&, this] {
                 head_cache = head;
                 _head.store(head);
             });
 
-            while(head != tail) {
+            while (head != tail) {
                 auto elem = std::launder(
                     reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
                 );
@@ -234,17 +236,19 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
         {
             auto tail = 0;
 
-            detail::scope_guard g([&, this]{
+            detail::scope_guard g([&, this] {
                 tail_cache = tail;
                 _tail.store(tail);
-            });
+                });
 
             auto src_tail = other._tail.load();
             auto src_head = other._head.load();
 
-            while(src_head != src_tail) {
+            while (src_head != src_tail) {
                 new(_buffer.data() + tail * sizeof(T))
-                    T(other._buffer.data() + src_head * sizeof(T));
+                    T(*std::launder(reinterpret_cast<T*>(
+                        other._buffer.data() + src_head * sizeof(T)
+                    )));
 
                 tail += 1;
                 src_head += 1;
@@ -272,11 +276,11 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
 
     // copies elem into queue, if theres space
     // returns true if successful, false otherwise
-    bool push(const T& elem) {
+    bool push(const T & elem) {
         auto tail = _tail.load(std::memory_order_relaxed);
         auto next = tail + 1;
         if (next == size) next = 0;
-        
+
         auto head = head_cache;
         if (next == head) {
             head = head_cache = _head.load(std::memory_order_acquire);
@@ -284,20 +288,20 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
                 return false;
             }
         }
-        
+
         new(_buffer.data() + tail * sizeof(T)) T(elem);
-        
+
         _tail.store(next, std::memory_order_release);
         return true;
     }
 
     // tries to move elem into queue, if theres space
     // returns true if successful, false otherwise
-    bool push(T&& elem) {
+    bool push(T && elem) {
         auto tail = _tail.load(std::memory_order_relaxed);
         auto next = tail + 1;
         if (next == size) next = 0;
-        
+
         auto head = head_cache;
         if (next == head) {
             head = head_cache = _head.load(std::memory_order_acquire);
@@ -305,9 +309,9 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
                 return false;
             }
         }
-        
+
         new(_buffer.data() + tail * sizeof(T)) T(std::move(elem));
-        
+
         _tail.store(next, std::memory_order_release);
         return true;
     }
@@ -319,7 +323,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
     InputIterator push(InputIterator beg, InputIterator end) {
         auto tail = _tail.load(std::memory_order_relaxed);
 
-        detail::scope_guard g([&, this]{
+        detail::scope_guard g([&, this] {
             _tail.store(tail, std::memory_order_release);
         });
 
@@ -344,16 +348,16 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
 
     // tries to copy count elements into the queue
     // returns the number of elements that actually got copied
-    size_type push_n(size_type count, const T& elem) {
+    size_type push_n(size_type count, const T & elem) {
         auto tail = _tail.load(std::memory_order_relaxed);
         auto head = head_cache;
-        auto free = head - tail;
-        if (free < 0) free += size;
+        auto free = size - (tail - head);
+        if (free > size) free -= size;
 
         if (count >= free) {
             head = head_cache = _head.load(std::memory_order_acquire);
-            free = head - tail;
-            if (free < 0) free += size;
+            free = size - (tail - head);
+            if (free > size) free -= size;
 
             if (count >= free) {
                 count = free - 1;
@@ -363,12 +367,12 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
         auto next = tail + count;
         if (next >= size) next -= size;
 
-        detail::scope_guard g([&, this]{
+        detail::scope_guard g([&, this] {
             _tail.store(tail, std::memory_order_release);
-        });
+            });
 
         while (tail != next) {
-            new(_buffer.data() + tail * sizeof(T)) T{elem};
+            new(_buffer.data() + tail * sizeof(T)) T{ elem };
 
             tail += 1;
             if (tail == size) tail = 0;
@@ -380,7 +384,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
     // constructs an element of type T in place using Args
     // returns true if successful, false otherwise
     template<typename... Args>
-    bool emplace(Args&&... args) {
+    bool emplace(Args && ... args) {
         static_assert(
             std::is_constructible_v<value_type, Args...>,
             "Type T must be constructible from Args..."
@@ -389,7 +393,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
         auto tail = _tail.load(std::memory_order_relaxed);
         auto next = tail + 1;
         if (next == size) next = 0;
-        
+
         auto head = head_cache;
         if (next == head) {
             head = head_cache = _head.load(std::memory_order_acquire);
@@ -398,8 +402,8 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
             }
         }
 
-        new(_buffer.data() + tail * sizeof(T)) T{std::forward<Args>(args)...};
-        
+        new(_buffer.data() + tail * sizeof(T)) T{ std::forward<Args>(args)... };
+
         _tail.store(next, std::memory_order_release);
         return true;
     }
@@ -407,7 +411,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
     // tries to construct count elements of type T in place using Args
     // returns the number of elements that got constructed
     template<typename... Args>
-    size_type emplace_n(size_type count, Args&&... args) {
+    size_type emplace_n(size_type count, Args && ... args) {
         static_assert(
             std::is_constructible_v<value_type, Args...>,
             "Type T must be constructible from Args..."
@@ -415,13 +419,14 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
 
         auto tail = _tail.load(std::memory_order_relaxed);
         auto head = head_cache;
-        auto free = head - tail;
-        if (free < 0) free += size;
+        auto free = size - (tail - head);
+        if (free > size) free -= size;
 
         if (count >= free) {
             head = head_cache = _head.load(std::memory_order_acquire);
-            free = head - tail;
-            if (free < 0) free += size;
+            free = size - (tail - head);
+            if (free > size) free -= size;
+
             if (count >= free) {
                 count = free - 1;
             }
@@ -430,12 +435,12 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
         auto next = tail + count;
         if (next >= size) next -= size;
 
-        detail::scope_guard g([&, this]{
+        detail::scope_guard g([&, this] {
             _tail.store(tail, std::memory_order_release);
         });
 
         while (tail != next) {
-            new(_buffer.data() + tail * sizeof(T)) T{args...};
+            new(_buffer.data() + tail * sizeof(T)) T{ args... };
 
             tail += 1;
             if (tail == size) tail = 0;
@@ -452,7 +457,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
     // This function returns true if there was space for at least one element,
     // and Callback returned true. Otherwise, false will be returned.
     template<typename Callback>
-    bool produce(Callback&& cb) {
+    bool produce(Callback && cb) {
         static_assert(
             std::is_invocable_r_v<bool, Callback&&, void*>,
             "Callback must return bool, and take void*"
@@ -461,7 +466,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
         auto tail = _tail.load(std::memory_order_relaxed);
         auto next = tail + 1;
         if (next == size) next = 0;
-        
+
         auto head = head_cache;
         if (next == head) {
             head = head_cache = _head.load(std::memory_order_acquire);
@@ -475,7 +480,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
             _tail.store(next, std::memory_order_release);
             return true;
         }
-        
+
         return false;
     }
 
@@ -489,7 +494,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
     // the number of elements that were successfully constructed, that is the
     // number of times Callback returned true.
     template<typename Callback>
-    size_type produce_n(size_type count, Callback&& cb) {
+    size_type produce_n(size_type count, Callback && cb) {
         static_assert(
             std::is_invocable_r_v<bool, Callback&&, void*>,
             "Callback must return bool, and take void*"
@@ -497,13 +502,14 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
 
         auto tail = _tail.load(std::memory_order_relaxed);
         auto head = head_cache;
-        auto free = head - tail;
-        if (free < 0) free += size;
+        auto free = size - (tail - head);
+        if (free > size) free -= size;
 
         if (count >= free) {
             head = head_cache = _head.load(std::memory_order_acquire);
-            free = head - tail;
-            if (free < 0) free += size;
+            free = size - (tail - head);
+            if (free > size) free -= size;
+
             if (count >= free) {
                 count = free - 1;
             }
@@ -512,7 +518,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
         auto next = tail + count;
         if (next >= size) next -= size;
 
-        detail::scope_guard g([&, this]{
+        detail::scope_guard g([&, this] {
             _tail.store(tail, std::memory_order_release);
         });
 
@@ -536,7 +542,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
     const T* front() const {
         auto head = _head.load(std::memory_order_relaxed);
         auto tail = tail_cache;
-        
+
         if (head == tail) {
             tail = tail_cache = _tail.load(std::memory_order_acquire);
             if (head == tail) {
@@ -554,7 +560,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
     T* front() {
         auto head = _head.load(std::memory_order_relaxed);
         auto tail = tail_cache;
-        
+
         if (head == tail) {
             tail = tail_cache = _tail.load(std::memory_order_acquire);
             if (head == tail) {
@@ -576,7 +582,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
             reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
         );
         elem->~T();
-        
+
         auto next = head + 1;
         if (next == size) next = 0;
         _head.store(next, std::memory_order_release);
@@ -584,24 +590,24 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
 
     // tries to move the next element to be dequeued into out.
     // Returns true if out was assigned to, false otherwise.
-    bool pop(T& out) {
+    bool pop(T & out) {
         auto head = _head.load(std::memory_order_relaxed);
         auto tail = tail_cache;
-        
+
         if (head == tail) {
             tail = tail_cache = _tail.load(std::memory_order_acquire);
             if (head == tail) {
                 return false;
             }
         }
-        
+
         auto elem = std::launder(
             reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
         );
 
         out = std::move(*elem);
         elem->~T();
-        
+
         auto next = head + 1;
         if (next == size) next = 0;
         _head.store(next, std::memory_order_release);
@@ -615,7 +621,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
     // element is removed from the queue and this function returns true.
     // Otherwise this function returns false.
     template<typename Callback>
-    bool consume(Callback&& cb) {
+    bool consume(Callback && cb) {
         static_assert(
             std::is_invocable_r_v<bool, Callback&&, T*>,
             "Callback must return bool, and take T*"
@@ -623,14 +629,14 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
 
         auto head = _head.load(std::memory_order_relaxed);
         auto tail = tail_cache;
-        
+
         if (head == tail) {
             tail = tail_cache = _tail.load(std::memory_order_acquire);
             if (head == tail) {
                 return false;
             }
         }
-        
+
         auto elem = std::launder(
             reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
         );
@@ -654,7 +660,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
     // removed, and this function returns. This function always returns the
     // number of times Callback returned true.
     template<typename Callback>
-    size_type consume_all(Callback&& cb) {
+    size_type consume_all(Callback && cb) {
         static_assert(
             std::is_invocable_r_v<bool, Callback&&, T*>,
             "Callback must return bool, and take T*"
@@ -663,12 +669,12 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
         auto head = _head.load(std::memory_order_relaxed);
         auto tail = tail_cache = _tail.load(std::memory_order_acquire);
         auto old_head = head;
-        
-        detail::scope_guard g([&, this]{
+
+        detail::scope_guard g([&, this] {
             _head.store(head, std::memory_order_release);
         });
 
-        while(head != tail) {
+        while (head != tail) {
             auto elem = std::launder(
                 reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
             );
@@ -682,7 +688,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
             if (head == size) head = 0;
         }
 
-        auto ret = head - old_head;
+        ptrdiff_t ret = head - old_head;
         if (ret < 0) ret += size;
         return ret;
     }
@@ -690,11 +696,11 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
 private:
     alignas(align) std::array<std::byte, size * sizeof(T)> _buffer;
 
-    alignas(align) std::atomic<size_t> _tail{0};
-    mutable size_t head_cache{0};
+    alignas(align) std::atomic<size_t> _tail{ 0 };
+    mutable size_t head_cache{ 0 };
 
-    alignas(align) std::atomic<size_t> _head{0};
-    mutable size_t tail_cache{0};
+    alignas(align) std::atomic<size_t> _head{ 0 };
+    mutable size_t tail_cache{ 0 };
 };
 
 } // namespace deaod
