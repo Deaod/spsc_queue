@@ -1,5 +1,5 @@
 # SPSCQueue
-A collection of fast bounded single producer, single consumer queues.
+A fast bounded single producer, single consumer queue.
 
 spsc_queue.h defines a single template, `spsc_queue`, which implements a bounded
 queue with at most one producer, and one consumer at the same time.
@@ -10,8 +10,8 @@ the implementation trades a worse worst-case for a significantly better
 average-case.
 
 spsc_queue has highest throughput under contention if:
-  * you have small (register sized) elements OR
-  * if the total size of the queue (size of element times number of elements)
+  * You have small (register sized) elements OR
+  * If the total size of the queue (size of element times number of elements)
     will not exceed the size of your processors fastest cache.
 
 ## Interface
@@ -116,3 +116,8 @@ size_type consume_all(Callback&& cb);
 ```
 Tries to remove all objects from the queue by calling `Callback` for each object, passing the address of each object to it, until either the queue is empty, or Callback returns `false`. Returns the number of times `Callback` was invoked and returned `true`.
 `Callback` is an invocable with one parameter of type `T*`, and a return type of `bool`.
+
+## Benchmarks
+
+The following image shows off best case performance for this implementation, as outlined in the description above.
+![Benchmark comparing folly, rigtorp, and moodycamel against spsc_queue](/docs/queue_benchmark_8.svg)
