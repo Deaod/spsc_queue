@@ -121,3 +121,6 @@ Tries to remove all objects from the queue by calling `Callback` for each object
 
 The following image shows off best case performance for this implementation, as outlined in the description above.
 ![Benchmark comparing folly, rigtorp, and moodycamel against spsc_queue](docs/queue_bench_8.svg)
+
+### Parameters
+The test was run on a laptop running Windows 10 1903, with an i7-6600U running at 3.1 to 3.2GHz, and 8GB of DDR4-2133 RAM. The test program was compiled using MSVC 19.21. Producer and consumer thread were pinned to different physical cores.
