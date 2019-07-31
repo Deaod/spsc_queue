@@ -18,15 +18,15 @@ spsc_queue has highest throughput under contention if:
 
 ### Template
 spsc_queue takes up to three template parameters:
-  * `T`: The type of a single element
-  * `queue_size`: The number of slots for elements within the queue.
+* `T`: The type of a single element
+* `queue_size`: The number of slots for elements within the queue.
                 Note: Due to implementation details, one slot is reserved and
                       cannot be used.
-  * `align_log2`: The number of bytes to align on, expressed as an exponent for
+* `align_log2`: The number of bytes to align on, expressed as an exponent for
                 two, so the actual alignment is `(1 << align_log2)` bytes. This
                 number should be at least `log2(alignof(size_t))`. Ideal values
-                avoid destructive hardware interference (false sharing).
-                Default is 7.
+                avoid destructive hardware interference (false sharing).  
+                Default is 7.  
                 `alignof(T)` must not be greater than `(1 << align_log2)`.
 
 
