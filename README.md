@@ -19,7 +19,7 @@ spsc_queue has highest throughput under contention if:
 ### Template
 spsc_queue takes up to three template parameters:
 * `T`: The type of a single element
-* `queue_size`: The number of slots for elements within the queue.
+* `queue_size`: The number of slots for elements within the queue.  
                 Note: Due to implementation details, one slot is reserved and
                       cannot be used.
 * `align_log2`: The number of bytes to align on, expressed as an exponent for
@@ -75,15 +75,15 @@ Tries to insert `count` objects of type `T` constructed from `args` into the que
 template<typename Callback>
 bool produce(Callback&& cb);
 ```
-Tries to insert an object into the queue by calling `Callback` if there is space for an object. Returns `true` if there was space for an object, and `Callback` returned `true`. Returns `false` otherwise.
+Tries to insert an object into the queue by calling `Callback` if there is space for an object. Returns `true` if there was space for an object, and `Callback` returned `true`. Returns `false` otherwise.  
 `Callback` is an invocable with one parameter of type `void*`, and a return type of `bool`. Callback is expected to place a new object of type `T` at the address passed to it.
 
 ```c++
 template<typename Callback>
 size_type produce_n(size_type count, Callback&& cb);
 ```
-Tries to insert `count` objects into the queue by calling `Callback` as long as there is space in the queue, or until Callback returns `false` once.
-Returns the number of times `Callback` was invoked and returned `true`.
+Tries to insert `count` objects into the queue by calling `Callback` as long as there is space in the queue, or until Callback returns `false` once.  
+Returns the number of times `Callback` was invoked and returned `true`.  
 `Callback` is an invocable with one parameter of type `void*`, and a return type of `bool`. `Callback` is expected to place a new object of type `T` at the address passed to it.
 
 ### Dequeue
@@ -107,14 +107,14 @@ Tries to move the next object in the queue into `out`, if such an object exists.
 template<typename Callback>
 bool consume(Callback&& cb);
 ```
-Tries to remove an object from the queue by calling `Callback` and passing the object to it. Returns `true` if there was an object in the queue and `Callback` returned `true`. Returns `false` otherwise.
+Tries to remove an object from the queue by calling `Callback` and passing the object to it. Returns `true` if there was an object in the queue and `Callback` returned `true`. Returns `false` otherwise.  
 `Callback` is an invocable with one parameter of type `T*`, and a return type of `bool`.
 
 ```c++
 template<typename Callback>
 size_type consume_all(Callback&& cb);
 ```
-Tries to remove all objects from the queue by calling `Callback` for each object, passing the address of each object to it, until either the queue is empty, or Callback returns `false`. Returns the number of times `Callback` was invoked and returned `true`.
+Tries to remove all objects from the queue by calling `Callback` for each object, passing the address of each object to it, until either the queue is empty, or Callback returns `false`. Returns the number of times `Callback` was invoked and returned `true`.  
 `Callback` is an invocable with one parameter of type `T*`, and a return type of `bool`.
 
 ## Benchmarks
