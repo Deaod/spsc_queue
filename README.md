@@ -49,15 +49,21 @@ bool push(T&& elem);
 Tries to insert `elem` into the queue. Returns `true` if successful, `false` otherwise.
 
 ```c++
-template<typename InputIterator>
-InputIterator push(InputIterator beg, InputIterator end);
-```
-Tries to copy elements into the queue from `beg`, until `end` is reached. Returns an iterator for the next element to be inserted.
-
-```c++
 size_type push_n(size_type count, const T& elem);
 ```
 Tries to insert `count` copies of `elem` into the queue. Returns the number of copies successfully inserted.
+
+```c++
+template<typename InputIterator>
+InputIterator write(InputIterator beg, InputIterator end);
+```
+Tries to copy elements into the queue from `beg`, until `end` is reached. Returns the number of elements copied into the queue.
+
+```c++
+template<typename Iterator>
+size_type write(size_type count, Iterator elems);
+```
+Tries to copy `count` elements into the queue from `elems` until either the queue is full or all have been copied. Returns the number of elements copied into the queue.
 
 ```c++
 template<typename... Args>
@@ -102,6 +108,18 @@ Removes the next object from the queue. This function must not be called if the 
 bool pop(T& out);
 ```
 Tries to move the next object in the queue into `out`, if such an object exists. Returns `true` if out contains a new object. Returns `false` if the queue was empty.
+
+```c++
+template<typename Iterator>
+size_type read(Iterator beg, Iterator end)
+```
+Tries to move elements out of the queue to `[beg .. end)`, until either all have been moved or the queue is empty. Returns the number of elements that were moved.
+
+```c++
+template<typename Iterator>
+size_type read(size_type count, Iterator elems)
+```
+Tries to move elements out of the queue to `[elems .. elems + count)`, until either `count` elements have been moved, or the queue is empty. Returns the number of elements that were moved.
 
 ```c++
 template<typename Callback>
