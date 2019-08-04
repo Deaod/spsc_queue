@@ -18,6 +18,7 @@ In order to avoid false sharing `head` and `tail` should reside on different cac
 In order to improve average enqueue and dequeue latency the implementation caches `head` and `tail`. The cached values reside next to the other value, so `head_cache` is next to `tail` and `tail_cache` is next to `head`. `head_cache` points to somewhere within the free section of the buffer. `tail_cache` points to somewhere within the filled section of the buffer.
 
 ## Interface
+### Summary
 There are a lot of different ways to enqueue and dequeue elements.
 * `write` enqueues from iterators
 * `push` and `push_n` enqueue from a reference
