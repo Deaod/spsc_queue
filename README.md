@@ -1,4 +1,4 @@
-# SPSCQueue
+# spsc_queue
 A fast bounded single producer, single consumer queue.
 
 spsc_queue.h defines a single template, `spsc_queue`, which implements a bounded
