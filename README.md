@@ -13,6 +13,14 @@ spsc_queue has highest throughput under contention if:
   * You have small (register sized) elements OR
   * If the total size of the queue (size of element times number of elements)
     will not exceed the size of your processors fastest cache.
+    
+## Design
+The concept is a ring buffer of fixed size with member variables `head` and `tail` containing indices of slots in the buffer. The two member variables divide the buffer into two sections, one without content that can be overridden, one with valid elements. Enqueue operations modify `tail`, dequeue operations modify `head`. The buffer is empty if `head == tail`, and full if `head == ((tail + 1) % queue_size)`.  
+![Conceptual depiction of a ring buffer](docs/ring_buffer_concept.png)
+
+In order to avoid false sharing `head` and `tail` should reside on different cache-lines (see `align_log2` template parameter).
+
+In order to improve average enqueue and dequeue latency the implementation caches `head` and `tail`. The cached values reside next to the other value, so `head_cache` is next to `tail` and `tail_cache` is next to `head`. `head_cache` points to somewhere within the free section of the buffer. `tail_cache` points to somewhere within the filled section of the buffer.
 
 ## Interface
 
