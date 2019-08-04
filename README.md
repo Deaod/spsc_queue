@@ -8,14 +8,26 @@ spsc_queue is intended to be used in environments, where heap-allocation must ne
 spsc_queue has highest throughput under contention if:
 * You have small (register sized) elements OR
 * If the total size of the queue (size of element times number of elements) will not exceed the size of your processors fastest cache.
+
+1. [**Design**](#design)
+1. [**Interface**](#interface)
+   1. [Summary](#summary)
+   1. [Template](#template)
+   1. [General](#general)
+   1. [Enqueue](#enqueue)
+   1. [Dequeue](#dequeue)
+   1. [Exception Safety](#exception-safety)
+1. [**Benchmarks**](#benchmarks)
+   1. [Parameters](#parameters)
     
+
 ## Design
-The concept is a ring buffer of fixed size with member variables `head` and `tail` containing indices of slots in the buffer. The two member variables divide the buffer into two sections, one without content that can be overridden, one with valid elements. Enqueue operations modify `tail`, dequeue operations modify `head`. The buffer is empty if `head == tail`, and full if `head == ((tail + 1) % queue_size)`.  
+The concept is a ring buffer of fixed size with member variables `head` and `tail` containing indices of slots in the buffer. The two member variables divide the buffer into two sections, one without content that can be overwritten, and one with valid elements. Enqueue operations modify `tail`, dequeue operations modify `head`. The buffer is empty if `head == tail`, and full if `head == ((tail + 1) % queue_size)`, so it is full when there is exactly one free slot left.  
 ![Conceptual depiction of a ring buffer](docs/ring_buffer_concept.png)
 
-In order to avoid false sharing `head` and `tail` should reside on different cache-lines (see `align_log2` template parameter).
+In order to avoid false sharing `head` and `tail` should reside on different cache-lines (see [`align_log2` template parameter](#template)).
 
-In order to improve average enqueue and dequeue latency the implementation caches `head` and `tail`. The cached values reside next to the other value, so `head_cache` is next to `tail` and `tail_cache` is next to `head`. `head_cache` points to somewhere within the free section of the buffer. `tail_cache` points to somewhere within the filled section of the buffer.
+In order to improve average enqueue and dequeue latency the implementation caches `head` and `tail`. The cache of one value resides next to the other value, so `head_cache` is next to `tail` and `tail_cache` is next to `head`. `head_cache` points to somewhere within the free section of the buffer. `tail_cache` points to somewhere within the filled section of the buffer.
 
 ## Interface
 ### Summary
@@ -164,4 +176,4 @@ The following image shows off best case performance for this implementation, as 
 ![Benchmark comparing folly, rigtorp, and moodycamel against spsc_queue](docs/queue_bench_32k.svg)
 
 ### Parameters
-The test was run on a laptop running Windows 10 1903, with an i7-6600U running at 3.1 to 3.2GHz, and 8GB of DDR4-2133 RAM. The test program was compiled using MSVC 19.21. Producer and consumer thread were pinned to different physical cores.
+The test was run on a laptop running Windows 10 1903, with an i7-6600U running at 3.1 to 3.2GHz, and 8GB of DDR4-2133 RAM. The test program was compiled using MSVC 19.22. Producer and consumer thread were pinned to different physical cores.
