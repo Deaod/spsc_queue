@@ -9,6 +9,7 @@ spsc_queue has highest throughput under contention if:
 * You have small (register sized) elements OR
 * If the total size of the queue (size of element times number of elements) will not exceed the size of your processors fastest cache.
 
+### Table of Content
 1. [**Design**](#design)
 1. [**Interface**](#interface)
    1. [Summary](#summary)
