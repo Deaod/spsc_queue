@@ -1,18 +1,13 @@
 # spsc_queue
 A fast bounded single producer, single consumer queue.
 
-spsc_queue.h defines a single template, `spsc_queue`, which implements a bounded
-queue with at most one producer, and one consumer at the same time.
+spsc_queue.h defines a single template, `spsc_queue`, which implements a bounded queue with at most one producer, and one consumer at the same time.
 
-spsc_queue is intended to be used in environments, where heap-allocation must
-never occur. While it is possible to use spsc_queue in real-time environments,
-the implementation trades a worse worst-case for a significantly better
-average-case.
+spsc_queue is intended to be used in environments, where heap-allocation must never occur. While it is possible to use spsc_queue in real-time environments, the implementation trades a worse worst-case for a significantly better average-case.
 
 spsc_queue has highest throughput under contention if:
-  * You have small (register sized) elements OR
-  * If the total size of the queue (size of element times number of elements)
-    will not exceed the size of your processors fastest cache.
+* You have small (register sized) elements OR
+* If the total size of the queue (size of element times number of elements) will not exceed the size of your processors fastest cache.
     
 ## Design
 The concept is a ring buffer of fixed size with member variables `head` and `tail` containing indices of slots in the buffer. The two member variables divide the buffer into two sections, one without content that can be overridden, one with valid elements. Enqueue operations modify `tail`, dequeue operations modify `head`. The buffer is empty if `head == tail`, and full if `head == ((tail + 1) % queue_size)`.  
@@ -23,6 +18,20 @@ In order to avoid false sharing `head` and `tail` should reside on different cac
 In order to improve average enqueue and dequeue latency the implementation caches `head` and `tail`. The cached values reside next to the other value, so `head_cache` is next to `tail` and `tail_cache` is next to `head`. `head_cache` points to somewhere within the free section of the buffer. `tail_cache` points to somewhere within the filled section of the buffer.
 
 ## Interface
+There are a lot of different ways to enqueue and dequeue elements.
+* `write` enqueues from iterators
+* `push` and `push_n` enqueue from a reference
+* `emplace` and `emplace_n` enqueue by constructing elements from the provided arguments in-place
+* `produce` and `produce_n` enqueue by calling the provided callable, which is expected to construct an element using placement new
+* `read` dequeues by moving to iterators
+* `pop` dequeues by moving to a reference
+* `consume` and `consume_all` dequeue by calling the provided callable for each element
+* `discard` dequeues the next element without any way of looking at it
+* `front` returns a pointer to the next element
+
+Complexity of use loosely corresponds to length of description.  
+Be very careful with `produce` and `produce_n`.  
+`write` and `read` are able to provide throughput roughly equivalent to that of `memmove`.
 
 ### Template
 spsc_queue takes up to three template parameters:
@@ -36,7 +45,6 @@ spsc_queue takes up to three template parameters:
                 avoid destructive hardware interference (false sharing).  
                 Default is 7.  
                 `alignof(T)` must not be greater than `(1 << align_log2)`.
-
 
 ### General
 ```c++
@@ -142,6 +150,11 @@ size_type consume_all(Callback&& cb);
 ```
 Tries to remove all objects from the queue by calling `Callback` for each object, passing the address of each object to it, until either the queue is empty, or Callback returns `false`. Returns the number of times `Callback` was invoked and returned `true`.  
 `Callback` is an invocable with one parameter of type `T*`, and a return type of `bool`.
+
+### Exception Safety
+All functions provide at least the basic exception safety guarantee. In special circumstances, like when using `write` with contiguous or random access iterators and `T` being trivially copy-constructible, a strong exception safety is guaranteed.
+
+Generally, an enqueue or dequeue operation will try to commit as much progress as possible in case of a thrown exception. This avoids having to undo uncommitted changes during stack unwinding.
 
 ## Benchmarks
 
