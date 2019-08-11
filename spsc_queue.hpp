@@ -160,9 +160,9 @@ Interface:
 #include <cstddef> // for std::byte
 #include <functional> // for std::invoke
 #include <iterator> // for std::iterator_traits
-#include <new> // for std::launder
-#include <type_traits> // for std::forward, std::is_invocable_r_v, and
-                       // std::is_constructible_v
+#include <new> // for std::launder and placement-new operator
+#include <type_traits> // for std::forward, std::is_invocable_r, and
+                       // std::is_constructible
 
 namespace deaod {
 
@@ -210,7 +210,7 @@ struct is_reference_wrapper : std::false_type {};
 template<typename T>
 struct is_reference_wrapper<std::reference_wrapper<T>> : std::true_type{};
 
-#if 0 && (__cplusplus >= 201703L || __cpp_lib_invoke > 0)
+#if __cplusplus >= 201703L || __cpp_lib_invoke > 0
 
 using std::invoke;
 
@@ -382,6 +382,7 @@ private:
 
         other._ignore = true;
     }
+
 private:
     bool _ignore = false;
     bool should_call() const {
@@ -626,7 +627,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
             std::is_trivially_constructible<T, decltype(*beg)>::value
         > tag;
 
-        return write_fwd(tag, beg, end);
+        return this->write_fwd(tag, beg, end);
     }
 
     // copies elements into queue until count elements have been copied or
@@ -644,7 +645,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
             std::is_trivially_constructible<T, decltype(*elems)>::value
         > tag;
         
-        return write_fwd(tag, elems, elems + count);
+        return this->write_fwd(tag, elems, elems + count);
     }
 
 private:
@@ -657,7 +658,7 @@ private:
         Iterator beg,
         Iterator end)
     {
-        return write_internal(beg, end);
+        return this->write_internal(beg, end);
     }
 
     template<typename Iterator>
@@ -666,7 +667,7 @@ private:
         Iterator beg,
         Iterator end)
     {
-        return write_internal(beg, end);
+        return this->write_internal(beg, end);
     }
 
     template<typename Iterator>
@@ -675,7 +676,7 @@ private:
         Iterator beg,
         Iterator end)
     {
-        return write_copy(end - beg, beg);
+        return this->write_copy(end - beg, beg);
     }
 
     template<typename Iterator>
@@ -684,7 +685,7 @@ private:
         Iterator beg,
         Iterator end)
     {
-        return write_trivial(end - beg, beg);
+        return this->write_trivial(end - beg, beg);
     }
 
     template<typename Iterator>
@@ -693,7 +694,7 @@ private:
         size_type count,
         Iterator elems)
     {
-        return write_copy(count, elems);
+        return this->write_copy(count, elems);
     }
 
     template<typename Iterator>
@@ -702,7 +703,7 @@ private:
         size_type count,
         Iterator elems)
     {
-        return write_trivial(count, elems);
+        return this->write_trivial(count, elems);
     }
 
     template<typename Iterator>
@@ -1083,7 +1084,7 @@ public:
             std::is_trivially_constructible<T, decltype(*beg)>::value
         > tag;
 
-        return read_fwd(tag, beg, end);
+        return this->read_fwd(tag, beg, end);
     }
 
     // tries to move elements to [elems .. elems + count) or until the queue is
@@ -1101,7 +1102,7 @@ public:
             std::is_trivially_constructible<T, decltype(*elems)>::value
         > tag;
         
-        return read_fwd(tag, elems, elems + count);
+        return this->read_fwd(tag, elems, elems + count);
     }
 
 private:
@@ -1111,7 +1112,7 @@ private:
         Iterator beg,
         Iterator end)
     {
-        return read_internal(beg, end);
+        return this->read_internal(beg, end);
     }
 
     template<typename Iterator>
@@ -1120,7 +1121,7 @@ private:
         Iterator beg,
         Iterator end)
     {
-        return read_internal(beg, end);
+        return this->read_internal(beg, end);
     }
 
     template<typename Iterator>
@@ -1129,7 +1130,7 @@ private:
         Iterator beg,
         Iterator end)
     {
-        return read_copy(end - beg, beg);
+        return this->read_copy(end - beg, beg);
     }
 
     template<typename Iterator>
@@ -1138,7 +1139,7 @@ private:
         Iterator beg,
         Iterator end)
     {
-        return read_trivial(end - beg, beg);
+        return this->read_trivial(end - beg, beg);
     }
 
     template<typename Iterator>
@@ -1147,7 +1148,7 @@ private:
         size_type count,
         Iterator elems)
     {
-        return read_copy(count, elems);
+        return this->read_copy(count, elems);
     }
 
     template<typename Iterator>
@@ -1156,7 +1157,7 @@ private:
         size_type count,
         Iterator elems)
     {
-        return read_trivial(count, elems);
+        return this->read_trivial(count, elems);
     }
 
     template<typename Iterator>
