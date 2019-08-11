@@ -84,8 +84,8 @@ size_type push_n(size_type count, const T& elem);
 Tries to insert `count` copies of `elem` into the queue. Returns the number of copies successfully inserted.
 
 ```c++
-template<typename InputIterator>
-InputIterator write(InputIterator beg, InputIterator end);
+template<typename Iterator>
+size_type write(Iterator beg, Iterator end);
 ```
 Tries to copy elements into the queue from `beg`, until `end` is reached. Returns the number of elements copied into the queue.
 
