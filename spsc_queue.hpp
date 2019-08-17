@@ -515,78 +515,19 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
     // copies elem into queue, if theres space
     // returns true if successful, false otherwise
     bool push(const T& elem) {
-        auto tail = _tail.load(std::memory_order_relaxed);
-        auto next = tail + 1;
-        if (next == size) next = 0;
-
-        auto head = head_cache;
-        if (next == head) {
-            head = head_cache = _head.load(std::memory_order_acquire);
-            if (next == head) {
-                return false;
-            }
-        }
-
-        new(_buffer.data() + tail * sizeof(T)) T(elem);
-
-        _tail.store(next, std::memory_order_release);
-        return true;
+        return this->emplace(elem);
     }
 
     // tries to move elem into queue, if theres space
     // returns true if successful, false otherwise
     bool push(T&& elem) {
-        auto tail = _tail.load(std::memory_order_relaxed);
-        auto next = tail + 1;
-        if (next == size) next = 0;
-
-        auto head = head_cache;
-        if (next == head) {
-            head = head_cache = _head.load(std::memory_order_acquire);
-            if (next == head) {
-                return false;
-            }
-        }
-
-        new(_buffer.data() + tail * sizeof(T)) T(std::move(elem));
-
-        _tail.store(next, std::memory_order_release);
-        return true;
+        return this->emplace(std::move(elem));
     }
 
     // tries to copy count elements into the queue
     // returns the number of elements that actually got copied
     size_type push_n(size_type count, const T& elem) {
-        auto tail = _tail.load(std::memory_order_relaxed);
-        auto head = head_cache;
-        auto free = size - (tail - head);
-        if (free > size) free -= size;
-
-        if (count >= free) {
-            head = head_cache = _head.load(std::memory_order_acquire);
-            free = size - (tail - head);
-            if (free > size) free -= size;
-
-            if (count >= free) {
-                count = free - 1;
-            }
-        }
-
-        auto next = tail + count;
-        if (next >= size) next -= size;
-
-        auto g = detail::make_scope_guard([&, this] {
-            _tail.store(tail, std::memory_order_release);
-        });
-
-        while (tail != next) {
-            new(_buffer.data() + tail * sizeof(T)) T{ elem };
-
-            tail += 1;
-            if (tail == size) tail = 0;
-        }
-
-        return count;
+        return this->emplace_n(count, elem);
     }
 
 
@@ -645,7 +586,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
             std::is_trivially_constructible<T, decltype(*elems)>::value
         > tag;
         
-        return this->write_fwd(tag, elems, elems + count);
+        return this->write_fwd(tag, count, elems);
     }
 
 private:
@@ -724,15 +665,8 @@ private:
         }
 
         auto next = tail + count;
-        if (next >= size) next -= size;
-
-        if (next >= tail) {
-            std::copy_n(
-                elems,
-                count,
-                reinterpret_cast<T*>(_buffer.data() + tail * sizeof(T))
-            );
-        } else {
+        if (next >= size) {
+            next -= size;
             auto split_pos = count - next;
             std::copy_n(
                 elems,
@@ -743,6 +677,12 @@ private:
                 elems + split_pos,
                 next,
                 reinterpret_cast<T*>(_buffer.data())
+            );
+        } else {
+            std::copy_n(
+                elems,
+                count,
+                reinterpret_cast<T*>(_buffer.data() + tail * sizeof(T))
             );
         }
 
@@ -1102,7 +1042,7 @@ public:
             std::is_trivially_constructible<T, decltype(*elems)>::value
         > tag;
         
-        return this->read_fwd(tag, elems, elems + count);
+        return this->read_fwd(tag, count, elems);
     }
 
 private:
@@ -1178,17 +1118,8 @@ private:
         }
 
         auto next = head + count;
-        if (next >= size) next -= size;
-
-        if (next >= head) {
-            std::copy_n(
-                elems,
-                count,
-                detail::launder(
-                    reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
-                )
-            );
-        } else {
+        if (next >= size) {
+            next -= size;
             auto split_pos = count - next;
             std::copy_n(
                 elems,
@@ -1201,6 +1132,14 @@ private:
                 elems + split_pos,
                 next,
                 detail::launder(reinterpret_cast<T*>(_buffer.data()))
+            );
+        } else {
+            std::copy_n(
+                elems,
+                count,
+                detail::launder(
+                    reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+                )
             );
         }
 
