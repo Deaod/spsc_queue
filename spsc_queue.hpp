@@ -356,7 +356,7 @@ struct scope_guard {
     scope_guard(Callable&& f) : _f(std::forward<Callable>(f)) {}
     ~scope_guard() {
         if (should_call()) {
-            std::forward<Callable>(_f)();
+            _f();
         }
     };
     
@@ -390,7 +390,7 @@ private:
     }
 
 #endif
-    Callable&& _f;
+    Callable _f;
 };
 
 template<typename Callable>
