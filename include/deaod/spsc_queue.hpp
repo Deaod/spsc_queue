@@ -1,4 +1,4 @@
-/******************************************************************************
+/*******************************************************************************
  Copyright (c) 2019, Lukas Bagaric
  All rights reserved.
 
@@ -21,7 +21,7 @@
  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*******************************************************************************
+********************************************************************************
 
 This file defines a single template, spsc_queue, which implements a bounded
 queue with at most one producer, and one consumer at the same time.
@@ -151,7 +151,7 @@ Interface:
         Callable is an invocable with one parameter of type T*, and a return
         type of bool.
 
-******************************************************************************/
+*******************************************************************************/
 #pragma once
 
 #include <algorithm> // for std::copy_n
@@ -199,7 +199,7 @@ constexpr T* launder(T* p) noexcept {
     static_assert(
         std::is_function<T>::value == false && std::is_void<T>::value == false,
         "launder is invalid for function pointers and pointers to cv void"
-    );
+        );
     return p;
 }
 #endif
@@ -208,7 +208,7 @@ template<typename T>
 struct is_reference_wrapper : std::false_type {};
 
 template<typename T>
-struct is_reference_wrapper<std::reference_wrapper<T>> : std::true_type{};
+struct is_reference_wrapper<std::reference_wrapper<T>> : std::true_type {};
 
 #if __cplusplus >= 201703L || __cpp_lib_invoke > 0
 
@@ -241,14 +241,14 @@ private:
 
 public:
     using tag_type = if_t<_is_mem_func,
-        if_t<_is_a1_a_ptr,      fp_with_inst_ptr,
+        if_t<_is_a1_a_ptr, fp_with_inst_ptr,
         if_t<_is_a1_a_ref_wrap, fp_with_ref_wrap,
         /* else */              fp_with_inst_val>>,
     /* else */
-        if_t<_is_a1_a_ptr,      dp_with_inst_ptr,
+        if_t<_is_a1_a_ptr, dp_with_inst_ptr,
         if_t<_is_a1_a_ref_wrap, dp_with_ref_wrap,
         /* else */              dp_with_inst_val>>
-    >;
+        >;
 
     using result_type = decltype(invoke(
         std::declval<tag_type>(),
@@ -359,7 +359,7 @@ struct scope_guard {
             _f();
         }
     };
-    
+
     scope_guard(const scope_guard&) = delete;
     scope_guard& operator=(const scope_guard&) = delete;
 
@@ -398,21 +398,64 @@ scope_guard<Callable> make_scope_guard(Callable&& f) {
     return scope_guard<Callable>(std::forward<Callable>(f));
 }
 
+template<typename T> constexpr bool is_pow2_f(T val) {
+    return (val & (val - 1)) == 0;
+}
+
+template<typename T, T val>
+struct is_pow2 : std::integral_constant<bool, is_pow2_f(val)> {};
+
 } // namespace detail
 
-template<typename T, size_t queue_size, int align_log2 = 7>
-struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
+template<typename T, std::size_t queue_size, int align_log2 = 7>
+struct alignas((std::size_t) 1 << align_log2) spsc_queue { // gcc bug 89683
     using value_type = T;
-    using size_type = size_t;
+    using pointer = T*;
+    using const_pointer = const T*;
+    using reference = T&;
+    using const_reference = const T&;
+    using size_type = std::size_t;
+    using difference_type = std::ptrdiff_t;
 
     static const auto size = queue_size;
-    static const auto align = size_t(1) << align_log2;
+    static const auto align = size_type(1) << align_log2;
 
     static_assert(
         alignof(T) <= align,
         "Type T must not be more aligned than this queue"
-    );
+        );
 
+private:
+
+    // Abstraction for how to calculate the next index.
+    // Uses bit-masking if size is power of 2.
+    static size_type _next(size_type index) {
+        if (detail::is_pow2<size_type, size>::value) {
+            return (index + 1) & (size - 1);
+        } else {
+            if (index + 1 == size) {
+                return size_type(0);
+            } else {
+                return index + 1;
+            }
+        }
+    }
+
+    // Precondition: inc must be smaller than size
+    static size_type _next(size_type index, size_type inc) {
+        if (detail::is_pow2<size_type, size>::value) {
+            return (index + inc) & (size - 1);
+        } else {
+            size_type next = index + inc;
+            if (next >= size) {
+                return next - size;
+            } else {
+                return next;
+            }
+        }
+    }
+
+public:
     spsc_queue() = default;
 
     ~spsc_queue() {
@@ -421,10 +464,10 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
     }
 
     spsc_queue(const spsc_queue& other) {
-        auto tail = 0;
+        size_type tail = 0;
 
         auto g = detail::make_scope_guard([&, this] {
-            tail_cache = tail;
+            _tail_cache = tail;
             _tail.store(tail);
         });
 
@@ -438,8 +481,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
                 )));
 
             tail += 1;
-            src_head += 1;
-            if (src_head == size) src_head = 0;
+            src_head = _next(src_head);
         }
     }
 
@@ -451,7 +493,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
             auto tail = _tail.load();
 
             auto g = detail::make_scope_guard([&, this] {
-                head_cache = head;
+                _head_cache = head;
                 _head.store(head);
             });
 
@@ -461,21 +503,20 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
                 );
                 elem->~T();
 
-                head += 1;
-                if (head == size) head = 0;
+                head = _next(head);
             }
         }
 
         _tail.store(0);
-        head_cache = 0;
+        _head_cache = 0;
         _head.store(0);
-        tail_cache = 0;
+        _tail_cache = 0;
 
         {
-            auto tail = 0;
+            size_type tail = 0;
 
             auto g = detail::make_scope_guard([&, this] {
-                tail_cache = tail;
+                _tail_cache = tail;
                 _tail.store(tail);
             });
 
@@ -486,11 +527,10 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
                 new(_buffer.data() + tail * sizeof(T))
                     T(*detail::launder(reinterpret_cast<T*>(
                         other._buffer.data() + src_head * sizeof(T)
-                    )));
+                        )));
 
                 tail += 1;
-                src_head += 1;
-                if (src_head == size) src_head = 0;
+                src_head = _next(src_head);
             }
         }
 
@@ -506,8 +546,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
 
     bool is_full() const {
         auto head = _head.load(std::memory_order_acquire);
-        auto tail = _tail.load(std::memory_order_acquire) + 1;
-        if (tail == size) tail = 0;
+        auto tail = _next(_tail.load(std::memory_order_acquire));
 
         return head == tail;
     }
@@ -539,7 +578,7 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
         static_assert(
             std::is_constructible<T, decltype(*beg)>::value,
             "T must be constructible from Iterator::reference"
-        );
+            );
 
         using traits = std::iterator_traits<Iterator>;
 
@@ -579,13 +618,13 @@ struct alignas((size_t)1 << align_log2) spsc_queue { // gcc bug 89683
         static_assert(
             std::is_constructible<T, decltype(*elems)>::value,
             "T must be constructible from Iterator::reference"
-        );
+            );
 
         readwrite_tag<
             true,
             std::is_trivially_constructible<T, decltype(*elems)>::value
         > tag;
-        
+
         return this->write_fwd(tag, count, elems);
     }
 
@@ -597,8 +636,7 @@ private:
     size_type write_fwd(
         readwrite_tag<false, false>,
         Iterator beg,
-        Iterator end)
-    {
+        Iterator end) {
         return this->write_internal(beg, end);
     }
 
@@ -606,8 +644,7 @@ private:
     size_type write_fwd(
         readwrite_tag<false, true>,
         Iterator beg,
-        Iterator end)
-    {
+        Iterator end) {
         return this->write_internal(beg, end);
     }
 
@@ -615,8 +652,7 @@ private:
     size_type write_fwd(
         readwrite_tag<true, false>,
         Iterator beg,
-        Iterator end)
-    {
+        Iterator end) {
         return this->write_copy(end - beg, beg);
     }
 
@@ -624,8 +660,7 @@ private:
     size_type write_fwd(
         readwrite_tag<true, true>,
         Iterator beg,
-        Iterator end)
-    {
+        Iterator end) {
         return this->write_trivial(end - beg, beg);
     }
 
@@ -633,8 +668,7 @@ private:
     size_type write_fwd(
         readwrite_tag<true, false>,
         size_type count,
-        Iterator elems)
-    {
+        Iterator elems) {
         return this->write_copy(count, elems);
     }
 
@@ -642,20 +676,19 @@ private:
     size_type write_fwd(
         readwrite_tag<true, true>,
         size_type count,
-        Iterator elems)
-    {
+        Iterator elems) {
         return this->write_trivial(count, elems);
     }
 
     template<typename Iterator>
     size_type write_trivial(size_type count, Iterator elems) {
         auto tail = _tail.load(std::memory_order_relaxed);
-        auto head = head_cache;
+        auto head = _head_cache;
         auto free = size - (tail - head);
         if (free > size) free -= size;
 
         if (count >= free) {
-            head = head_cache = _head.load(std::memory_order_acquire);
+            head = _head_cache = _head.load(std::memory_order_acquire);
             free = size - (tail - head);
             if (free > size) free -= size;
 
@@ -693,12 +726,12 @@ private:
     template<typename Iterator>
     size_type write_copy(size_type count, Iterator elems) {
         auto tail = _tail.load(std::memory_order_relaxed);
-        auto head = head_cache;
+        auto head = _head_cache;
         auto free = size - (tail - head);
         if (free > size) free -= size;
 
         if (count >= free) {
-            head = head_cache = _head.load(std::memory_order_acquire);
+            head = _head_cache = _head.load(std::memory_order_acquire);
             free = size - (tail - head);
             if (free > size) free -= size;
 
@@ -707,19 +740,19 @@ private:
             }
         }
 
-        auto next = tail + count;
-        if (next >= size) next -= size;
+        if (count == 0) return 0;
 
         auto g = detail::make_scope_guard([&, this] {
             _tail.store(tail, std::memory_order_release);
         });
 
-        while (tail != next) {
+        auto next = _next(tail, count);
+        while (true) {
             new(_buffer.data() + tail * sizeof(T)) T(*elems);
 
+            tail = _next(tail);
+            if (tail == next) break;
             ++elems;
-            tail += 1;
-            if (tail == size) tail = 0;
         }
 
         return count;
@@ -735,12 +768,10 @@ private:
 
         auto count = size_type(0);
         for (; beg != end; ++beg) {
-            auto next = tail + 1;
-            if (next == size) next = 0;
-
-            auto head = head_cache;
+            auto next = _next(tail);
+            auto head = _head_cache;
             if (next == head) {
-                head = head_cache = _head.load(std::memory_order_acquire);
+                head = _head_cache = _head.load(std::memory_order_acquire);
                 if (next == head) {
                     break;
                 }
@@ -762,21 +793,20 @@ public:
         static_assert(
             std::is_constructible<value_type, Args...>::value,
             "Type T must be constructible from Args..."
-        );
+            );
 
         auto tail = _tail.load(std::memory_order_relaxed);
-        auto next = tail + 1;
-        if (next == size) next = 0;
+        auto next = _next(tail);
 
-        auto head = head_cache;
+        auto head = _head_cache;
         if (next == head) {
-            head = head_cache = _head.load(std::memory_order_acquire);
+            head = _head_cache = _head.load(std::memory_order_acquire);
             if (next == head) {
                 return false;
             }
         }
 
-        new(_buffer.data() + tail * sizeof(T)) T{ std::forward<Args>(args)... };
+        new(_buffer.data() + tail * sizeof(T)) T{std::forward<Args>(args)...};
 
         _tail.store(next, std::memory_order_release);
         return true;
@@ -789,15 +819,15 @@ public:
         static_assert(
             std::is_constructible<value_type, Args...>::value,
             "Type T must be constructible from Args..."
-        );
+            );
 
         auto tail = _tail.load(std::memory_order_relaxed);
-        auto head = head_cache;
+        auto head = _head_cache;
         auto free = size - (tail - head);
         if (free > size) free -= size;
 
         if (count >= free) {
-            head = head_cache = _head.load(std::memory_order_acquire);
+            head = _head_cache = _head.load(std::memory_order_acquire);
             free = size - (tail - head);
             if (free > size) free -= size;
 
@@ -806,15 +836,15 @@ public:
             }
         }
 
-        auto next = tail + count;
-        if (next >= size) next -= size;
+        if (count == 0) return 0;
 
         auto g = detail::make_scope_guard([&, this] {
             _tail.store(tail, std::memory_order_release);
         });
 
+        auto next = _next(tail, count);
         while (tail != next) {
-            new(_buffer.data() + tail * sizeof(T)) T{ args... };
+            new(_buffer.data() + tail * sizeof(T)) T{args...};
 
             tail += 1;
             if (tail == size) tail = 0;
@@ -835,15 +865,14 @@ public:
         static_assert(
             detail::is_invocable_r<bool, Callable&&, void*>::value,
             "Callable must return bool, and take void*"
-        );
+            );
 
         auto tail = _tail.load(std::memory_order_relaxed);
-        auto next = tail + 1;
-        if (next == size) next = 0;
+        auto next = _next(tail);
 
-        auto head = head_cache;
+        auto head = _head_cache;
         if (next == head) {
-            head = head_cache = _head.load(std::memory_order_acquire);
+            head = _head_cache = _head.load(std::memory_order_acquire);
             if (next == head) {
                 return false;
             }
@@ -872,15 +901,15 @@ public:
         static_assert(
             detail::is_invocable_r<bool, Callable&&, void*>::value,
             "Callable must return bool, and take void*"
-        );
+            );
 
         auto tail = _tail.load(std::memory_order_relaxed);
-        auto head = head_cache;
+        auto head = _head_cache;
         auto free = size - (tail - head);
         if (free > size) free -= size;
 
         if (count >= free) {
-            head = head_cache = _head.load(std::memory_order_acquire);
+            head = _head_cache = _head.load(std::memory_order_acquire);
             free = size - (tail - head);
             if (free > size) free -= size;
 
@@ -889,13 +918,13 @@ public:
             }
         }
 
-        auto next = tail + count;
-        if (next >= size) next -= size;
+        if (count == 0) return 0;
 
         auto g = detail::make_scope_guard([&, this] {
             _tail.store(tail, std::memory_order_release);
         });
 
+        auto next = _next(tail, count);
         while (tail != next) {
             void* storage = _buffer.data() + tail * sizeof(T);
             if (!detail::invoke(f, storage)) {
@@ -904,21 +933,20 @@ public:
                 return ret;
             }
 
-            tail += 1;
-            if (tail == size) tail = 0;
+            tail = _next(tail);
         }
 
         return count;
     }
 
-    // Returns a pointer to the next element that can be dequeued, or nullptr
+    // Returns a pointer to the _next element that can be dequeued, or nullptr
     // if the queue is empty.
     const T* front() const {
         auto head = _head.load(std::memory_order_relaxed);
-        auto tail = tail_cache;
+        auto tail = _tail_cache;
 
         if (head == tail) {
-            tail = tail_cache = _tail.load(std::memory_order_acquire);
+            tail = _tail_cache = _tail.load(std::memory_order_acquire);
             if (head == tail) {
                 return nullptr;
             }
@@ -933,10 +961,10 @@ public:
     // if the queue is empty.
     T* front() {
         auto head = _head.load(std::memory_order_relaxed);
-        auto tail = tail_cache;
+        auto tail = _tail_cache;
 
         if (head == tail) {
-            tail = tail_cache = _tail.load(std::memory_order_acquire);
+            tail = _tail_cache = _tail.load(std::memory_order_acquire);
             if (head == tail) {
                 return nullptr;
             }
@@ -949,27 +977,69 @@ public:
 
     // Discards the next element to be dequeued. The queue must contain at
     // least one element before calling this function.
-    void discard() {
+    size_type discard(size_type count = 1) {
+        if (count == 0) return 0;
+        if (count == 1) {
+            auto head = _head.load(std::memory_order_relaxed);
+
+            auto elem = detail::launder(
+                reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+            );
+            elem->~T();
+
+            _head.store(_next(head), std::memory_order_release);
+            return 1;
+        }
+
+        if (count >= size)
+            count = size - 1;
+
         auto head = _head.load(std::memory_order_relaxed);
+        auto tail = _tail_cache;
+        auto filled = (tail - head);
+        if (filled > size) filled += size;
 
-        auto elem = detail::launder(
-            reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
-        );
-        elem->~T();
+        if (count >= filled) {
+            tail = _tail_cache = _tail.load(std::memory_order_acquire);
+            filled = (tail - head);
+            if (filled > size) filled += size;
 
-        auto next = head + 1;
-        if (next == size) next = 0;
-        _head.store(next, std::memory_order_release);
+            if (count >= filled) {
+                count = filled;
+            }
+        }
+
+        auto next = _next(head, count);
+
+        if (std::is_destructible<T>::value &&
+            not std::is_trivially_destructible<T>::value
+            ) {
+            auto g = detail::make_scope_guard([&, this] {
+                _head.store(head, std::memory_order_release);
+            });
+
+            while (head != next) {
+                auto elem = detail::launder(
+                    reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+                );
+                elem->~T();
+                head = _next(head);
+            }
+        } else {
+            _head.store(next, std::memory_order_release);
+        }
+
+        return count;
     }
 
     // tries to move the next element to be dequeued into out.
     // Returns true if out was assigned to, false otherwise.
     bool pop(T& out) {
         auto head = _head.load(std::memory_order_relaxed);
-        auto tail = tail_cache;
+        auto tail = _tail_cache;
 
         if (head == tail) {
-            tail = tail_cache = _tail.load(std::memory_order_acquire);
+            tail = _tail_cache = _tail.load(std::memory_order_acquire);
             if (head == tail) {
                 return false;
             }
@@ -982,9 +1052,7 @@ public:
         out = std::move(*elem);
         elem->~T();
 
-        auto next = head + 1;
-        if (next == size) next = 0;
-        _head.store(next, std::memory_order_release);
+        _head.store(_next(head), std::memory_order_release);
         return true;
     }
 
@@ -995,7 +1063,7 @@ public:
         static_assert(
             std::is_assignable<decltype(*beg), T&&>::value,
             "You must be able to assign T&& to Iterator::reference"
-        );
+            );
 
         using traits = std::iterator_traits<Iterator>;
 
@@ -1035,13 +1103,13 @@ public:
         static_assert(
             std::is_assignable<decltype(*elems), T&&>::value,
             "You must be able to assign T&& to Iterator::reference"
-        );
+            );
 
         readwrite_tag<
             true,
             std::is_trivially_constructible<T, decltype(*elems)>::value
         > tag;
-        
+
         return this->read_fwd(tag, count, elems);
     }
 
@@ -1050,8 +1118,7 @@ private:
     size_type read_fwd(
         readwrite_tag<false, false>,
         Iterator beg,
-        Iterator end)
-    {
+        Iterator end) {
         return this->read_internal(beg, end);
     }
 
@@ -1059,8 +1126,7 @@ private:
     size_type read_fwd(
         readwrite_tag<false, true>,
         Iterator beg,
-        Iterator end)
-    {
+        Iterator end) {
         return this->read_internal(beg, end);
     }
 
@@ -1068,8 +1134,7 @@ private:
     size_type read_fwd(
         readwrite_tag<true, false>,
         Iterator beg,
-        Iterator end)
-    {
+        Iterator end) {
         return this->read_copy(end - beg, beg);
     }
 
@@ -1077,8 +1142,7 @@ private:
     size_type read_fwd(
         readwrite_tag<true, true>,
         Iterator beg,
-        Iterator end)
-    {
+        Iterator end) {
         return this->read_trivial(end - beg, beg);
     }
 
@@ -1086,8 +1150,7 @@ private:
     size_type read_fwd(
         readwrite_tag<true, false>,
         size_type count,
-        Iterator elems)
-    {
+        Iterator elems) {
         return this->read_copy(count, elems);
     }
 
@@ -1095,20 +1158,19 @@ private:
     size_type read_fwd(
         readwrite_tag<true, true>,
         size_type count,
-        Iterator elems)
-    {
+        Iterator elems) {
         return this->read_trivial(count, elems);
     }
 
     template<typename Iterator>
     size_type read_trivial(size_type count, Iterator elems) {
         auto head = _head.load(std::memory_order_relaxed);
-        auto tail = tail_cache;
+        auto tail = _tail_cache;
         auto filled = (tail - head);
         if (filled > size) filled += size;
 
         if (count >= filled) {
-            tail = tail_cache = _tail.load(std::memory_order_acquire);
+            tail = _tail_cache = _tail.load(std::memory_order_acquire);
             filled = (tail - head);
             if (filled > size) filled += size;
 
@@ -1150,12 +1212,12 @@ private:
     template<typename Iterator>
     size_type read_copy(size_type count, Iterator elems) {
         auto head = _head.load(std::memory_order_relaxed);
-        auto tail = tail_cache;
+        auto tail = _tail_cache;
         auto filled = (tail - head);
         if (filled > size) filled += size;
 
         if (count >= filled) {
-            tail = tail_cache = _tail.load(std::memory_order_acquire);
+            tail = _tail_cache = _tail.load(std::memory_order_acquire);
             filled = (tail - head);
             if (filled > size) filled += size;
 
@@ -1164,14 +1226,14 @@ private:
             }
         }
 
-        auto next = head + count;
-        if (next >= size) next -= size;
+        if (count == 0) return 0;
 
         auto g = detail::make_scope_guard([&, this] {
             _head.store(head, std::memory_order_release);
         });
 
-        while (head != next) {
+        auto next = _next(head, count);
+        while (true) {
             auto elem = detail::launder(
                 reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
             );
@@ -1179,8 +1241,9 @@ private:
             *elems = std::move(elem);
             elem->~T();
 
-            head += 1;
-            if (head == size) head = 0;
+            head = _next(head);
+            if (head == next) break;
+            ++elems;
         }
 
         return count;
@@ -1196,9 +1259,9 @@ private:
 
         auto count = size_type(0);
         for (; beg != end; ++beg) {
-            auto tail = tail_cache;
+            auto tail = _tail_cache;
             if (head == tail) {
-                tail = tail_cache = _tail.load(std::memory_order_acquire);
+                tail = _tail_cache = _tail.load(std::memory_order_acquire);
                 if (head == tail) {
                     break;
                 }
@@ -1207,12 +1270,11 @@ private:
             auto elem = detail::launder(
                 reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
             );
-            
+
             *beg = std::move(elem);
             elem->~T();
 
-            head += 1;
-            if (head == size) head = 0;
+            head = _next(head);
             count += 1;
         }
 
@@ -1231,13 +1293,13 @@ public:
         static_assert(
             detail::is_invocable_r<bool, Callable&&, T*>::value,
             "Callable must return bool, and take T*"
-        );
+            );
 
         auto head = _head.load(std::memory_order_relaxed);
-        auto tail = tail_cache;
+        auto tail = _tail_cache;
 
         if (head == tail) {
-            tail = tail_cache = _tail.load(std::memory_order_acquire);
+            tail = _tail_cache = _tail.load(std::memory_order_acquire);
             if (head == tail) {
                 return false;
             }
@@ -1249,9 +1311,7 @@ public:
 
         if (detail::invoke(std::forward<Callable>(f), elem)) {
             elem->~T();
-            auto next = head + 1;
-            if (next == size) next = 0;
-            _head.store(next, std::memory_order_release);
+            _head.store(_next(head), std::memory_order_release);
             return true;
         }
 
@@ -1270,10 +1330,10 @@ public:
         static_assert(
             detail::is_invocable_r<bool, Callable&&, T*>::value,
             "Callable must return bool, and take T*"
-        );
+            );
 
         auto head = _head.load(std::memory_order_relaxed);
-        auto tail = tail_cache = _tail.load(std::memory_order_acquire);
+        auto tail = _tail_cache = _tail.load(std::memory_order_acquire);
         auto old_head = head;
 
         auto g = detail::make_scope_guard([&, this] {
@@ -1290,8 +1350,7 @@ public:
             }
 
             elem->~T();
-            head += 1;
-            if (head == size) head = 0;
+            head = _next(head);
         }
 
         ptrdiff_t ret = head - old_head;
@@ -1302,11 +1361,11 @@ public:
 private:
     alignas(align) std::array<detail::byte, size * sizeof(T)> _buffer;
 
-    alignas(align) std::atomic<size_t> _tail{ 0 };
-    mutable size_t head_cache{ 0 };
+    alignas(align) std::atomic<size_type> _tail{0};
+    mutable size_type _head_cache{0};
 
-    alignas(align) std::atomic<size_t> _head{ 0 };
-    mutable size_t tail_cache{ 0 };
+    alignas(align) std::atomic<size_type> _head{0};
+    mutable size_type _tail_cache{0};
 };
 
 } // namespace deaod
