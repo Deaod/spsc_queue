@@ -1362,10 +1362,10 @@ private:
     alignas(align) std::array<detail::byte, size * sizeof(T)> _buffer;
 
     alignas(align) std::atomic<size_type> _tail{0};
-    mutable size_type _head_cache{0};
+    alignas(align) mutable size_type _head_cache{0};
 
     alignas(align) std::atomic<size_type> _head{0};
-    mutable size_type _tail_cache{0};
+    alignas(align) mutable size_type _tail_cache{0};
 };
 
 } // namespace deaod
