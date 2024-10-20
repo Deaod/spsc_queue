@@ -39,36 +39,42 @@ static constexpr std::size_t qs(std::size_t l2, std::size_t es) {
     return (std::size_t(1) << l2) / es;
 }
 
-#define QUEUE_BENCH_FOR_SIZE(Func, Template, Size)                                        \
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(12, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(13, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(14, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(15, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(16, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(17, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(18, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(19, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(20, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(21, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(22, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(23, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(24, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(25, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(26, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(27, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(28, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(29, Size)>)->Apply(configure_queue);\
-    BENCHMARK_TEMPLATE(Func, Template<dummy<Size>, qs(30, Size)>)->Apply(configure_queue);
+#define QUEUE_BENCH_FOR_SIZES(F, T, ES, QS)                  \
+    BENCHMARK_TEMPLATE(F, T<dummy<ES>, QS>)                  \
+        ->Name(std::format("{}<{}<{},{}>>", #F, #T, ES, QS)) \
+        ->Apply(configure_queue)
 
-#define QUEUE_BENCH(Func, Template)           \
-    QUEUE_BENCH_FOR_SIZE(Func, Template,  8); \
-    QUEUE_BENCH_FOR_SIZE(Func, Template, 16); \
-    QUEUE_BENCH_FOR_SIZE(Func, Template, 24); \
-    QUEUE_BENCH_FOR_SIZE(Func, Template, 32); \
-    QUEUE_BENCH_FOR_SIZE(Func, Template, 40); \
-    QUEUE_BENCH_FOR_SIZE(Func, Template, 48); \
-    QUEUE_BENCH_FOR_SIZE(Func, Template, 56); \
-    QUEUE_BENCH_FOR_SIZE(Func, Template, 64);
+#define QUEUE_BENCH_FOR_SIZE(Func, Template, Size)             \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(12, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(13, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(14, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(15, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(16, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(17, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(18, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(19, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(20, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(21, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(22, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(23, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(24, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(25, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(26, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(27, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(28, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(29, Size)); \
+    QUEUE_BENCH_FOR_SIZES(Func, Template, Size, qs(30, Size));
+
+#define QUEUE_BENCH(Func, Template)          \
+    QUEUE_BENCH_FOR_SIZE(Func, Template,  4) \
+    QUEUE_BENCH_FOR_SIZE(Func, Template,  8) \
+    QUEUE_BENCH_FOR_SIZE(Func, Template, 16) \
+    QUEUE_BENCH_FOR_SIZE(Func, Template, 24) \
+    QUEUE_BENCH_FOR_SIZE(Func, Template, 32) \
+    QUEUE_BENCH_FOR_SIZE(Func, Template, 40) \
+    QUEUE_BENCH_FOR_SIZE(Func, Template, 48) \
+    QUEUE_BENCH_FOR_SIZE(Func, Template, 56) \
+    QUEUE_BENCH_FOR_SIZE(Func, Template, 64)
 
 template<typename T, size_t S>
 struct moodycamel_adapter {
