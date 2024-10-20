@@ -18,7 +18,15 @@ constexpr const size_t ItemsPerBatch = 10'000'000;
 
 template<std::size_t N>
 struct dummy {
-    std::byte n[N]{};
+    int idx;
+    std::byte n[N-sizeof(idx)]{};
+    dummy(int idx = 0) : idx(idx), n{} {}
+};
+
+template<>
+struct dummy<sizeof(int)> {
+    int idx;
+    dummy(int idx = 0) : idx(idx) {}
 };
 
 static void configure_queue(benchmark::internal::Benchmark* bench) {
