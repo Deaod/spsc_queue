@@ -98,7 +98,7 @@ struct drogalis_adapter {
 };
 
 template<typename type>
-static void bench_emplace_pop_deaod(benchmark::State& state) {
+static void bench_emplace_pop_deaod_empty(benchmark::State& state) {
     static std::atomic<type*> queue = nullptr;
 
     if (state.thread_index() == 0) {
@@ -140,6 +140,54 @@ static void bench_emplace_pop_deaod(benchmark::State& state) {
 }
 
 template<typename type>
+static void bench_emplace_pop_deaod(benchmark::State& state) {
+    static std::atomic<type*> queue = nullptr;
+
+    if (state.thread_index() == 0) {
+        auto p = new type{};
+        queue = p;
+    } else {
+        while (queue.load(std::memory_order_relaxed) == nullptr) {}
+    }
+
+    type& q = *queue;
+    if (state.thread_index() == 0) {
+        prepare_current_thread(Thread1Affinity);
+        while(state.KeepRunningBatch(ItemsPerBatch)) {
+            int counter = ItemsPerBatch;
+            while (counter > 0) {
+                counter -= int(q.emplace(counter));
+            }
+        }
+        state.SetItemsProcessed(state.iterations());
+        state.SetBytesProcessed(state.iterations() * sizeof(typename type::value_type));
+    } else if (state.thread_index() == 1) {
+        prepare_current_thread(Thread2Affinity);
+        typename type::value_type elem{};
+        while (state.KeepRunningBatch(ItemsPerBatch)) {
+            int counter = ItemsPerBatch;
+            while (counter > 0) {
+                auto e = q.front();
+                if (e) {
+                    if (e->idx != counter)
+                        state.SkipWithError("out of order element");
+                    q.discard();
+                    counter -= 1;
+                }
+            }
+        }
+        state.SetItemsProcessed(state.iterations());
+        state.SetBytesProcessed(state.iterations() * sizeof(typename type::value_type));
+
+        delete queue;
+        queue = nullptr;
+    } else {
+        prepare_current_thread(Thread2Affinity);
+        while (queue.load() != nullptr) {}
+    }
+}
+
+template<typename type>
 static void bench_emplace_pop_moodycamel(benchmark::State& state) {
     static std::atomic<typename type::base_type*> queue = nullptr;
 
@@ -156,7 +204,7 @@ static void bench_emplace_pop_moodycamel(benchmark::State& state) {
         while (state.KeepRunningBatch(ItemsPerBatch)) {
             int counter = ItemsPerBatch;
             while (counter > 0) {
-                counter -= int(q.try_emplace());
+                counter -= int(q.try_emplace(counter));
             }
         }
         state.SetItemsProcessed(state.iterations());
@@ -167,7 +215,13 @@ static void bench_emplace_pop_moodycamel(benchmark::State& state) {
         while (state.KeepRunningBatch(ItemsPerBatch)) {
             int counter = ItemsPerBatch;
             while (counter > 0) {
-                counter -= int(q.try_dequeue(elem));
+                auto e = q.peek();
+                if (e) {
+                    if (e->idx != counter)
+                        state.SkipWithError("out of order element");
+                    q.pop();
+                    counter -= 1;
+                }
             }
         }
         state.SetItemsProcessed(state.iterations());
@@ -198,7 +252,7 @@ static void bench_emplace_pop_rigtorp(benchmark::State& state) {
         while (state.KeepRunningBatch(ItemsPerBatch)) {
             int counter = ItemsPerBatch;
             while (counter > 0) {
-                counter -= int(q.try_emplace());
+                counter -= int(q.try_emplace(counter));
             }
         }
         state.SetItemsProcessed(state.iterations());
@@ -210,6 +264,8 @@ static void bench_emplace_pop_rigtorp(benchmark::State& state) {
             while (counter > 0) {
                 auto e = q.front();
                 if (e) {
+                    if (e->idx != counter)
+                        state.SkipWithError("out of order element");
                     q.pop();
                     counter -= 1;
                 }
@@ -243,7 +299,8 @@ static void bench_emplace_pop_drogalis(benchmark::State& state) {
         while (state.KeepRunningBatch(ItemsPerBatch)) {
             int counter = ItemsPerBatch;
             while (counter > 0) {
-                counter -= int(q.try_emplace());
+                q.emplace(counter);
+                counter -= 1;
             }
         }
         state.SetItemsProcessed(state.iterations());
@@ -254,7 +311,12 @@ static void bench_emplace_pop_drogalis(benchmark::State& state) {
         while (state.KeepRunningBatch(ItemsPerBatch)) {
             int counter = ItemsPerBatch;
             while (counter > 0) {
-                counter -= int(q.try_pop(elem));
+                bool r = q.try_pop(elem);
+                if (r) {
+                    if (elem.idx != counter)
+                        state.SkipWithError("out of order element");
+                    counter -= 1;
+                }
             }
         }
         state.SetItemsProcessed(state.iterations());
