@@ -14,6 +14,8 @@ int main(int argc, char** argv) {
     ::benchmark::RunSpecifiedBenchmarks();
 }
 
+constexpr const size_t ItemsPerBatch = 10'000'000;
+
 template<std::size_t N>
 struct dummy {
     std::byte n[N]{};
