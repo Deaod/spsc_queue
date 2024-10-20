@@ -423,7 +423,7 @@ struct alignas((std::size_t) 1 << align_log2) spsc_queue { // gcc bug 89683
     static_assert(
         alignof(T) <= align,
         "Type T must not be more aligned than this queue"
-        );
+    );
 
 private:
 
@@ -527,7 +527,7 @@ public:
                 new(_buffer.data() + tail * sizeof(T))
                     T(*detail::launder(reinterpret_cast<T*>(
                         other._buffer.data() + src_head * sizeof(T)
-                        )));
+                    )));
 
                 tail += 1;
                 src_head = _next(src_head);
@@ -578,7 +578,7 @@ public:
         static_assert(
             std::is_constructible<T, decltype(*beg)>::value,
             "T must be constructible from Iterator::reference"
-            );
+        );
 
         using traits = std::iterator_traits<Iterator>;
 
@@ -618,7 +618,7 @@ public:
         static_assert(
             std::is_constructible<T, decltype(*elems)>::value,
             "T must be constructible from Iterator::reference"
-            );
+        );
 
         readwrite_tag<
             true,
@@ -793,7 +793,7 @@ public:
         static_assert(
             std::is_constructible<value_type, Args...>::value,
             "Type T must be constructible from Args..."
-            );
+        );
 
         auto tail = _tail.load(std::memory_order_relaxed);
         auto next = _next(tail);
@@ -819,7 +819,7 @@ public:
         static_assert(
             std::is_constructible<value_type, Args...>::value,
             "Type T must be constructible from Args..."
-            );
+        );
 
         auto tail = _tail.load(std::memory_order_relaxed);
         auto head = _head_cache;
@@ -865,7 +865,7 @@ public:
         static_assert(
             detail::is_invocable_r<bool, Callable&&, void*>::value,
             "Callable must return bool, and take void*"
-            );
+        );
 
         auto tail = _tail.load(std::memory_order_relaxed);
         auto next = _next(tail);
@@ -901,7 +901,7 @@ public:
         static_assert(
             detail::is_invocable_r<bool, Callable&&, void*>::value,
             "Callable must return bool, and take void*"
-            );
+        );
 
         auto tail = _tail.load(std::memory_order_relaxed);
         auto head = _head_cache;
@@ -1013,7 +1013,7 @@ public:
 
         if (std::is_destructible<T>::value &&
             not std::is_trivially_destructible<T>::value
-            ) {
+        ) {
             auto g = detail::make_scope_guard([&, this] {
                 _head.store(head, std::memory_order_release);
             });
@@ -1063,7 +1063,7 @@ public:
         static_assert(
             std::is_assignable<decltype(*beg), T&&>::value,
             "You must be able to assign T&& to Iterator::reference"
-            );
+        );
 
         using traits = std::iterator_traits<Iterator>;
 
@@ -1103,7 +1103,7 @@ public:
         static_assert(
             std::is_assignable<decltype(*elems), T&&>::value,
             "You must be able to assign T&& to Iterator::reference"
-            );
+        );
 
         readwrite_tag<
             true,
@@ -1293,7 +1293,7 @@ public:
         static_assert(
             detail::is_invocable_r<bool, Callable&&, T*>::value,
             "Callable must return bool, and take T*"
-            );
+        );
 
         auto head = _head.load(std::memory_order_relaxed);
         auto tail = _tail_cache;
@@ -1330,7 +1330,7 @@ public:
         static_assert(
             detail::is_invocable_r<bool, Callable&&, T*>::value,
             "Callable must return bool, and take T*"
-            );
+        );
 
         auto head = _head.load(std::memory_order_relaxed);
         auto tail = _tail_cache = _tail.load(std::memory_order_acquire);
