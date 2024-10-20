@@ -430,7 +430,7 @@ private:
     // Abstraction for how to calculate the next index.
     // Uses bit-masking if size is power of 2.
     static size_type _next(size_type index) {
-        if (detail::is_pow2<size_type, size>::value) {
+        if constexpr (detail::is_pow2<size_type, size>::value) {
             return (index + 1) & (size - 1);
         } else {
             if (index + 1 == size) {
@@ -443,7 +443,7 @@ private:
 
     // Precondition: inc must be smaller than size
     static size_type _next(size_type index, size_type inc) {
-        if (detail::is_pow2<size_type, size>::value) {
+        if constexpr (detail::is_pow2<size_type, size>::value) {
             return (index + inc) & (size - 1);
         } else {
             size_type next = index + inc;
