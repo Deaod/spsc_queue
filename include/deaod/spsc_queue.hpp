@@ -456,7 +456,10 @@ private:
     }
 
 public:
-    spsc_queue() = default;
+    spsc_queue() {
+        _buffer = _storage.data() + align;
+        memset(_buffer, 0, size * sizeof(T));
+    }
 
     ~spsc_queue() {
         std::atomic_thread_fence(std::memory_order_seq_cst);
@@ -475,9 +478,9 @@ public:
         auto src_head = other._head.load();
 
         while (src_head != src_tail) {
-            new(_buffer.data() + tail * sizeof(T))
+            new(_buffer + tail * sizeof(T))
                 T(*detail::launder(reinterpret_cast<T*>(
-                    other._buffer.data() + src_head * sizeof(T)
+                    other._buffer + src_head * sizeof(T)
                 )));
 
             tail += 1;
@@ -499,7 +502,7 @@ public:
 
             while (head != tail) {
                 auto elem = detail::launder(
-                    reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+                    reinterpret_cast<T*>(_buffer + head * sizeof(T))
                 );
                 elem->~T();
 
@@ -524,9 +527,9 @@ public:
             auto src_head = other._head.load();
 
             while (src_head != src_tail) {
-                new(_buffer.data() + tail * sizeof(T))
+                new(_buffer+ tail * sizeof(T))
                     T(*detail::launder(reinterpret_cast<T*>(
-                        other._buffer.data() + src_head * sizeof(T)
+                        other._buffer + src_head * sizeof(T)
                     )));
 
                 tail += 1;
@@ -704,18 +707,18 @@ private:
             std::copy_n(
                 elems,
                 split_pos,
-                reinterpret_cast<T*>(_buffer.data() + tail * sizeof(T))
+                reinterpret_cast<T*>(_buffer + tail * sizeof(T))
             );
             std::copy_n(
                 elems + split_pos,
                 next,
-                reinterpret_cast<T*>(_buffer.data())
+                reinterpret_cast<T*>(_buffer)
             );
         } else {
             std::copy_n(
                 elems,
                 count,
-                reinterpret_cast<T*>(_buffer.data() + tail * sizeof(T))
+                reinterpret_cast<T*>(_buffer + tail * sizeof(T))
             );
         }
 
@@ -748,7 +751,7 @@ private:
 
         auto next = _next(tail, count);
         while (true) {
-            new(_buffer.data() + tail * sizeof(T)) T(*elems);
+            new(_buffer + tail * sizeof(T)) T(*elems);
 
             tail = _next(tail);
             if (tail == next) break;
@@ -777,7 +780,7 @@ private:
                 }
             }
 
-            new(_buffer.data() + tail * sizeof(T)) T(*beg);
+            new(_buffer + tail * sizeof(T)) T(*beg);
             tail = next;
             count += 1;
         }
@@ -806,7 +809,7 @@ public:
             }
         }
 
-        new(_buffer.data() + tail * sizeof(T)) T{std::forward<Args>(args)...};
+        new(_buffer + tail * sizeof(T)) T{std::forward<Args>(args)...};
 
         _tail.store(next, std::memory_order_release);
         return true;
@@ -844,7 +847,7 @@ public:
 
         auto next = _next(tail, count);
         while (tail != next) {
-            new(_buffer.data() + tail * sizeof(T)) T{args...};
+            new(_buffer + tail * sizeof(T)) T{args...};
 
             tail += 1;
             if (tail == size) tail = 0;
@@ -878,7 +881,7 @@ public:
             }
         }
 
-        void* storage = _buffer.data() + tail * sizeof(T);
+        void* storage = _buffer + tail * sizeof(T);
         if (detail::invoke(std::forward<Callable>(f), storage)) {
             _tail.store(next, std::memory_order_release);
             return true;
@@ -926,7 +929,7 @@ public:
 
         auto next = _next(tail, count);
         while (tail != next) {
-            void* storage = _buffer.data() + tail * sizeof(T);
+            void* storage = _buffer + tail * sizeof(T);
             if (!detail::invoke(f, storage)) {
                 auto ret = next - tail;
                 if (ret < 0) ret += size;
@@ -953,7 +956,7 @@ public:
         }
 
         return detail::launder(
-            reinterpret_cast<const T*>(_buffer.data() + head * sizeof(T))
+            reinterpret_cast<const T*>(_buffer + head * sizeof(T))
         );
     }
 
@@ -971,7 +974,7 @@ public:
         }
 
         return detail::launder(
-            reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+            reinterpret_cast<T*>(_buffer + head * sizeof(T))
         );
     }
 
@@ -983,7 +986,7 @@ public:
             auto head = _head.load(std::memory_order_relaxed);
 
             auto elem = detail::launder(
-                reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+                reinterpret_cast<T*>(_buffer + head * sizeof(T))
             );
             elem->~T();
 
@@ -1020,7 +1023,7 @@ public:
 
             while (head != next) {
                 auto elem = detail::launder(
-                    reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+                    reinterpret_cast<T*>(_buffer + head * sizeof(T))
                 );
                 elem->~T();
                 head = _next(head);
@@ -1046,7 +1049,7 @@ public:
         }
 
         auto elem = detail::launder(
-            reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+            reinterpret_cast<T*>(_buffer + head * sizeof(T))
         );
 
         out = std::move(*elem);
@@ -1187,20 +1190,20 @@ private:
                 elems,
                 split_pos,
                 detail::launder(
-                    reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+                    reinterpret_cast<T*>(_buffer + head * sizeof(T))
                 )
             );
             std::copy_n(
                 elems + split_pos,
                 next,
-                detail::launder(reinterpret_cast<T*>(_buffer.data()))
+                detail::launder(reinterpret_cast<T*>(_buffer))
             );
         } else {
             std::copy_n(
                 elems,
                 count,
                 detail::launder(
-                    reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+                    reinterpret_cast<T*>(_buffer + head * sizeof(T))
                 )
             );
         }
@@ -1235,7 +1238,7 @@ private:
         auto next = _next(head, count);
         while (true) {
             auto elem = detail::launder(
-                reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+                reinterpret_cast<T*>(_buffer + head * sizeof(T))
             );
 
             *elems = std::move(elem);
@@ -1268,7 +1271,7 @@ private:
             }
 
             auto elem = detail::launder(
-                reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+                reinterpret_cast<T*>(_buffer + head * sizeof(T))
             );
 
             *beg = std::move(elem);
@@ -1306,7 +1309,7 @@ public:
         }
 
         auto elem = detail::launder(
-            reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+            reinterpret_cast<T*>(_buffer + head * sizeof(T))
         );
 
         if (detail::invoke(std::forward<Callable>(f), elem)) {
@@ -1342,7 +1345,7 @@ public:
 
         while (head != tail) {
             auto elem = detail::launder(
-                reinterpret_cast<T*>(_buffer.data() + head * sizeof(T))
+                reinterpret_cast<T*>(_buffer + head * sizeof(T))
             );
 
             if (!detail::invoke(f, elem)) {
@@ -1359,13 +1362,15 @@ public:
     }
 
 private:
-    alignas(align) std::array<detail::byte, size * sizeof(T)> _buffer;
-
     alignas(align) std::atomic<size_type> _tail{0};
     alignas(align) mutable size_type _head_cache{0};
 
     alignas(align) std::atomic<size_type> _head{0};
     alignas(align) mutable size_type _tail_cache{0};
+
+    alignas(align) detail::byte* _buffer;
+
+    alignas(align) std::array<detail::byte, size * sizeof(T) + 2*align> _storage;
 };
 
 } // namespace deaod
