@@ -23,7 +23,7 @@
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "cl.exe",
                 "CMAKE_CXX_COMPILER": "cl.exe",
-                "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /MP /utf-8 /validate-charset /EHsc /arch:AVX /bigobj /W4 /wd4324",
+                "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /MP /utf-8 /validate-charset /EHsc /FAu /arch:AVX /bigobj /W4 /wd4324",
                 "VCPKG_TARGET_TRIPLET": "x64-windows"
             },
             "condition": {
