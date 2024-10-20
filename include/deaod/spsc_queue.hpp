@@ -1014,7 +1014,7 @@ public:
 
         auto next = _next(head, count);
 
-        if (std::is_destructible<T>::value &&
+        if constexpr (std::is_destructible<T>::value &&
             not std::is_trivially_destructible<T>::value
         ) {
             auto g = detail::make_scope_guard([&, this] {
