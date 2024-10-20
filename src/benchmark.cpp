@@ -84,7 +84,6 @@ struct drogalis_adapter {
 template<typename type>
 static void bench_emplace_pop_deaod(benchmark::State& state) {
     static std::atomic<type*> queue = nullptr;
-    constexpr const size_t ItemsPerIteration = 10'000'000;
 
     if (state.thread_index() == 0) {
         auto p = new type{};
@@ -96,8 +95,8 @@ static void bench_emplace_pop_deaod(benchmark::State& state) {
     type& q = *queue;
     if (state.thread_index() == 0) {
         prepare_current_thread(Thread1Affinity);
-        while(state.KeepRunningBatch(ItemsPerIteration)) {
-            int counter = ItemsPerIteration;
+        while (state.KeepRunningBatch(ItemsPerBatch)) {
+            int counter = ItemsPerBatch;
             while (counter > 0) {
                 counter -= int(q.emplace());
             }
@@ -107,8 +106,8 @@ static void bench_emplace_pop_deaod(benchmark::State& state) {
     } else if (state.thread_index() == 1) {
         prepare_current_thread(Thread2Affinity);
         typename type::value_type elem{};
-        while (state.KeepRunningBatch(ItemsPerIteration)) {
-            int counter = ItemsPerIteration;
+        while (state.KeepRunningBatch(ItemsPerBatch)) {
+            int counter = ItemsPerBatch;
             while (counter > 0) {
                 counter -= int(q.pop(elem));
             }
@@ -127,7 +126,6 @@ static void bench_emplace_pop_deaod(benchmark::State& state) {
 template<typename type>
 static void bench_emplace_pop_moodycamel(benchmark::State& state) {
     static std::atomic<typename type::base_type*> queue = nullptr;
-    constexpr const size_t ItemsPerIteration = 10'000'000;
 
     if (state.thread_index() == 0) {
         auto p = new type::base_type{type::size};
@@ -139,8 +137,8 @@ static void bench_emplace_pop_moodycamel(benchmark::State& state) {
     typename type::base_type& q = *queue;
     if (state.thread_index() == 0) {
         prepare_current_thread(Thread1Affinity);
-        while (state.KeepRunningBatch(ItemsPerIteration)) {
-            int counter = ItemsPerIteration;
+        while (state.KeepRunningBatch(ItemsPerBatch)) {
+            int counter = ItemsPerBatch;
             while (counter > 0) {
                 counter -= int(q.try_emplace());
             }
@@ -150,8 +148,8 @@ static void bench_emplace_pop_moodycamel(benchmark::State& state) {
     } else if (state.thread_index() == 1) {
         prepare_current_thread(Thread2Affinity);
         typename type::value_type elem{};
-        while (state.KeepRunningBatch(ItemsPerIteration)) {
-            int counter = ItemsPerIteration;
+        while (state.KeepRunningBatch(ItemsPerBatch)) {
+            int counter = ItemsPerBatch;
             while (counter > 0) {
                 counter -= int(q.try_dequeue(elem));
             }
@@ -170,7 +168,6 @@ static void bench_emplace_pop_moodycamel(benchmark::State& state) {
 template<typename type>
 static void bench_emplace_pop_rigtorp(benchmark::State& state) {
     static std::atomic<typename type::base_type*> queue = nullptr;
-    constexpr const size_t ItemsPerIteration = 10'000'000;
 
     if (state.thread_index() == 0) {
         auto p = new type::base_type{type::size};
@@ -182,8 +179,8 @@ static void bench_emplace_pop_rigtorp(benchmark::State& state) {
     typename type::base_type& q = *queue;
     if (state.thread_index() == 0) {
         prepare_current_thread(Thread1Affinity);
-        while (state.KeepRunningBatch(ItemsPerIteration)) {
-            int counter = ItemsPerIteration;
+        while (state.KeepRunningBatch(ItemsPerBatch)) {
+            int counter = ItemsPerBatch;
             while (counter > 0) {
                 counter -= int(q.try_emplace());
             }
@@ -192,13 +189,11 @@ static void bench_emplace_pop_rigtorp(benchmark::State& state) {
         state.SetBytesProcessed(state.iterations() * sizeof(typename type::value_type));
     } else if (state.thread_index() == 1) {
         prepare_current_thread(Thread2Affinity);
-        typename type::value_type elem{};
-        while (state.KeepRunningBatch(ItemsPerIteration)) {
-            int counter = ItemsPerIteration;
+        while (state.KeepRunningBatch(ItemsPerBatch)) {
+            int counter = ItemsPerBatch;
             while (counter > 0) {
                 auto e = q.front();
                 if (e) {
-                    elem = *e;
                     q.pop();
                     counter -= 1;
                 }
@@ -218,7 +213,6 @@ static void bench_emplace_pop_rigtorp(benchmark::State& state) {
 template<typename type>
 static void bench_emplace_pop_drogalis(benchmark::State& state) {
     static std::atomic<typename type::base_type*> queue = nullptr;
-    constexpr const size_t ItemsPerIteration = 10'000'000;
 
     if (state.thread_index() == 0) {
         auto p = new type::base_type{type::size};
@@ -230,8 +224,8 @@ static void bench_emplace_pop_drogalis(benchmark::State& state) {
     typename type::base_type& q = *queue;
     if (state.thread_index() == 0) {
         prepare_current_thread(Thread1Affinity);
-        while (state.KeepRunningBatch(ItemsPerIteration)) {
-            int counter = ItemsPerIteration;
+        while (state.KeepRunningBatch(ItemsPerBatch)) {
+            int counter = ItemsPerBatch;
             while (counter > 0) {
                 counter -= int(q.try_emplace());
             }
@@ -241,8 +235,8 @@ static void bench_emplace_pop_drogalis(benchmark::State& state) {
     } else if (state.thread_index() == 1) {
         prepare_current_thread(Thread2Affinity);
         typename type::value_type elem{};
-        while (state.KeepRunningBatch(ItemsPerIteration)) {
-            int counter = ItemsPerIteration;
+        while (state.KeepRunningBatch(ItemsPerBatch)) {
+            int counter = ItemsPerBatch;
             while (counter > 0) {
                 counter -= int(q.try_pop(elem));
             }
